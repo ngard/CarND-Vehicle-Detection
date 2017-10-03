@@ -229,7 +229,7 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
                 # img_save = cv2.resize(img_save,(window,window))
                 # tstr = dt.now().strftime('%Y%m%d%H%M%S')
                 # cv2.imwrite("../images/temp/%s-%06d.png"%(tstr,index_image),img_save)
-                index_image += 1
+                # index_image += 1
     return rectangles
 
 def draw_boxes(img, rectangles):
@@ -276,12 +276,15 @@ spatial_size = dist_pickle["spatial_size"]
 hist_bins = dist_pickle["hist_bins"]
 
 is_write_out_movie = True
+is_write_out_image = False
 
 if is_write_out_movie:
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     video_writer = cv2.VideoWriter('detect_vehicle.avi',fourcc, 20.0, (1280,720))
 
+num_frame = 0
+    
 for img in read_movie("../project_video.mp4"):
     rectangles = []
     heatmap = np.zeros_like(img).astype(np.float64)
@@ -319,6 +322,9 @@ for img in read_movie("../project_video.mp4"):
 
     if is_write_out_movie:
         video_writer.write(img)
+    if is_write_out_image:
+        cv2.imwrite("%5d.png"%num_frame,img)
+        num_frame += 1
     
     cv2.imshow("img",img)
     cv2.imshow("heat",heatmap)
