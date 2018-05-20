@@ -6,7 +6,6 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.svm import LinearSVC
 
-
 # Define a function to compute binned color features
 def bin_spatial(img, size=(32, 32)):
     # Use cv2.resize().ravel() to create the feature vector
@@ -209,5 +208,5 @@ dist_pickle = {"svc":clf,
                "spatial_size":spatial_size,
                "hist_bins":hist_bins}
 
-pickle.dump(dist_pickle,open("svc.pickle","wb"))
+pickle.dump(dist_pickle,open("/home/tohge/data/udacity.carnd/out/svc.pickle","wb"))
 
