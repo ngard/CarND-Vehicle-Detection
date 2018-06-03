@@ -265,7 +265,7 @@ def draw_labeled_bboxes(img, labels):
     # Return the image
     return img
 
-dist_pickle = pickle.load(open("/home/tohge/data/udacity.carnd/out/svc.pickle","rb"))
+dist_pickle = pickle.load(open("/home/tohge/data/udacity.carnd/vehicle_detection/out/svc.pickle","rb"))
 
 clf = dist_pickle["svc"]
 X_scaler = dist_pickle["scaler"]
