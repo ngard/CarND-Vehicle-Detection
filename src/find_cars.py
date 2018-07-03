@@ -9,12 +9,18 @@ from scipy.ndimage.measurements import label
 from datetime import datetime as dt
 from common import mkdir_if_not_exists, convert_color, bin_spatial, color_hist, get_hog_features
 
-def read_movie(movie_path):
+def read_movie(movie_path, speed = 1):
     cap = cv2.VideoCapture(movie_path)
-    while(cap.isOpened()):
+    count_frame = 0
+    while(cap.isOpened()):        
         ret, frame = cap.read()
         if ret != True:
             break
+
+        count_frame += 1
+        if not count_frame % speed == 0:
+            continue
+        
         yield frame
     cap.release()
 
@@ -43,7 +49,7 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
     # 64 was the orginal sampling rate, with 8 cells and 8 pix per cell
     window = 64
     nblocks_per_window = (window // pix_per_cell) - cell_per_block + 1
-    cells_per_step = 2  # Instead of overlap, define how many cells to step
+    cells_per_step = 1  # Instead of overlap, define how many cells to step
     nxsteps = (nxblocks - nblocks_per_window) // cells_per_step
     nysteps = (nyblocks - nblocks_per_window) // cells_per_step
 
@@ -63,9 +69,9 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
             hog_feat1 = hog1[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel()
             hog_feat2 = hog2[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel()
             hog_feat3 = hog3[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel()
-            
+
             hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3
-            ))
+                ))
 
             xleft = xpos*pix_per_cell
             ytop = ypos*pix_per_cell
@@ -139,7 +145,7 @@ hist_bins = dist_pickle["hist_bins"]
 
 is_write_out_movie = True
 is_write_out_image = False
-speed = 10
+speed = 20
 
 if is_write_out_movie:
     # Define the codec and create VideoWriter object
@@ -148,42 +154,45 @@ if is_write_out_movie:
 
 count_frame = 0
     
-for img in read_movie("./project_video.mp4"):
+for img in read_movie("./project_video.mp4",speed):
     count_frame += 1
-    if not count_frame % speed == 0:
-        continue
     
     rectangles = []
     heatmap = np.zeros_like(img).astype(np.float64)
 
-    ystart = 400
-    ystop = 480
-    scale = 0.75
+    # ystart = 400
+    # ystop = 480
+    # scale = 0.75
+    # rectangles.extend(find_cars(img, ystart, ystop, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
+    
+    # ystart = 400
+    # ystop = 500
+    # scale = 1.
+    # rectangles.extend(find_cars(img, ystart, ystop, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
+
+    ystart = 375
+    ystop = 500
+    scale = 1.3
     rectangles.extend(find_cars(img, ystart, ystop, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
     
-    ystart = 400
-    ystop = 500
-    scale = 1.
-    rectangles.extend(find_cars(img, ystart, ystop, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
-
-    ystart = 400
+    ystart = 380
     ystop = 550
     scale = 1.5
     rectangles.extend(find_cars(img, ystart, ystop, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
 
-    ystart = 400
+    ystart = 385
     ystop = 600
     scale = 2.0
     rectangles.extend(find_cars(img, ystart, ystop, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
 
-    ystart = 400
+    ystart = 390
     ystop = 650
     scale = 2.5
     rectangles.extend(find_cars(img, ystart, ystop, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
     
     draw_boxes(img,rectangles)
     add_heat(heatmap,rectangles)
-    cv2.threshold(heatmap,5,255,cv2.THRESH_TOZERO,heatmap)
+    cv2.threshold(heatmap,3,255,cv2.THRESH_TOZERO,heatmap)
     labels = label(heatmap)
     draw_labeled_bboxes(img,labels)
 
