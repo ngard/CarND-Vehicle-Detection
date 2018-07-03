@@ -9,6 +9,8 @@ from scipy.ndimage.measurements import label
 from datetime import datetime as dt
 from common import mkdir_if_not_exists, convert_color, bin_spatial, color_hist, get_hog_features
 
+pickle_clf_info = pickle.load(open("/home/tohge/data/udacity.carnd/vehicle_detection/out/svc.pickle","rb"))
+
 def read_movie(movie_path, speed = 1):
     cap = cv2.VideoCapture(movie_path)
     count_frame = 0
@@ -24,8 +26,15 @@ def read_movie(movie_path, speed = 1):
         yield frame
     cap.release()
 
-def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins):
-
+def extract_candidate_regions_of_defined_size(img, ystart, ystop, scale):
+    clf = pickle_clf_info["svc"]
+    X_scaler = pickle_clf_info["scaler"]
+    orient = pickle_clf_info["orient"]
+    pix_per_cell = pickle_clf_info["pix_per_cell"]
+    cell_per_block = pickle_clf_info["cell_per_block"]
+    spatial_size = pickle_clf_info["spatial_size"]
+    hist_bins = pickle_clf_info["hist_bins"]
+    
     index_image = 0
 
     img_original = img.copy()
@@ -59,7 +68,8 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
     hog3 = get_hog_features(ch3, orient, pix_per_cell, cell_per_block, feature_vec=False)
 
     rectangles = []
-    
+    rectangles_all = []
+
     for xb in range(nxsteps):
         for yb in range(nysteps):
             ypos = yb*cells_per_step
@@ -86,23 +96,60 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
             # Scale features and make a prediction
             test_features = X_scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))
             #test_features = X_scaler.transform(np.hstack((shape_feat, hist_feat)).reshape(1, -1))
-            test_prediction = svc.predict(test_features)
+            test_prediction = clf.predict(test_features)
 
+            xbox_left = np.int(xleft*scale)
+            ytop_draw = np.int(ytop*scale)
+            win_draw = np.int(window*scale)
             if test_prediction == 1:
-                xbox_left = np.int(xleft*scale)
-                ytop_draw = np.int(ytop*scale)
-                win_draw = np.int(window*scale)
                 rectangles.append((xbox_left,ytop_draw,win_draw,scale,ystart))
-                # img_save = img_original[ytop_draw+ystart:ytop_draw+ystart+win_draw,xbox_left:xbox_left+win_draw]
+                # img_save = img_original[ytop_draw+ystart:ytop_draw+ystart+win_draw,xbox_left:xbox_left+win_draw]o
                 # img_save = cv2.resize(img_save,(window,window))
                 # tstr = dt.now().strftime('%Y%m%d%H%M%S')
                 # cv2.imwrite("../images/temp/%s-%06d.png"%(tstr,index_image),img_save)
                 # index_image += 1
-    return rectangles
 
-def draw_boxes(img, rectangles):
+            rectangles_all.append((xbox_left,ytop_draw,win_draw,scale,ystart))
+
+    return rectangles, rectangles_all
+
+def extract_candidate_regions(img):
+    rectangles = []
+    rectangles_all = []
+    
+    ystart = 390
+    ystop = 510
+    scale = 1.3
+    r, ra = extract_candidate_regions_of_defined_size(img, ystart, ystop, scale)
+    rectangles.extend(r)
+    rectangles_all.extend(ra)
+    
+    ystart = 390
+    ystop = 520
+    scale = 1.5
+    r, ra = extract_candidate_regions_of_defined_size(img, ystart, ystop, scale)
+    rectangles.extend(r)
+    rectangles_all.extend(ra)
+
+    ystart = 385
+    ystop = 550
+    scale = 2.0
+    r, ra = extract_candidate_regions_of_defined_size(img, ystart, ystop, scale)
+    rectangles.extend(r)
+    rectangles_all.extend(ra)
+
+    ystart = 380
+    ystop = 600
+    scale = 2.5
+    r, ra = extract_candidate_regions_of_defined_size(img, ystart, ystop, scale)
+    rectangles.extend(r)
+    rectangles_all.extend(ra)
+
+    return rectangles, rectangles_all
+
+def draw_boxes(img, rectangles, color=(255,0,0), width=2):
     for xbox_left,ytop_draw,win_draw,scale,ystart in rectangles:
-        cv2.rectangle(img,(xbox_left, ytop_draw+ystart),(xbox_left+win_draw,ytop_draw+win_draw+ystart),(255,0,),2)
+        cv2.rectangle(img,(xbox_left, ytop_draw+ystart),(xbox_left+win_draw,ytop_draw+win_draw+ystart),color,width)
 
 def add_heat(heatmap, rectangles):
     # Iterate through list of bboxes
@@ -133,19 +180,9 @@ def draw_labeled_bboxes(img, labels):
     # Return the image
     return img
 
-dist_pickle = pickle.load(open("/home/tohge/data/udacity.carnd/vehicle_detection/out/svc.pickle","rb"))
-
-clf = dist_pickle["svc"]
-X_scaler = dist_pickle["scaler"]
-orient = dist_pickle["orient"]
-pix_per_cell = dist_pickle["pix_per_cell"]
-cell_per_block = dist_pickle["cell_per_block"]
-spatial_size = dist_pickle["spatial_size"]
-hist_bins = dist_pickle["hist_bins"]
-
 is_write_out_movie = True
 is_write_out_image = False
-speed = 20
+speed = 1
 
 if is_write_out_movie:
     # Define the codec and create VideoWriter object
@@ -156,43 +193,14 @@ count_frame = 0
     
 for img in read_movie("./project_video.mp4",speed):
     count_frame += 1
-    
-    rectangles = []
+
+    rectangles, rectangles_all = extract_candidate_regions(img)
     heatmap = np.zeros_like(img).astype(np.float64)
 
-    # ystart = 400
-    # ystop = 480
-    # scale = 0.75
-    # rectangles.extend(find_cars(img, ystart, ystop, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
-    
-    # ystart = 400
-    # ystop = 500
-    # scale = 1.
-    # rectangles.extend(find_cars(img, ystart, ystop, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
-
-    ystart = 375
-    ystop = 500
-    scale = 1.3
-    rectangles.extend(find_cars(img, ystart, ystop, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
-    
-    ystart = 380
-    ystop = 550
-    scale = 1.5
-    rectangles.extend(find_cars(img, ystart, ystop, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
-
-    ystart = 385
-    ystop = 600
-    scale = 2.0
-    rectangles.extend(find_cars(img, ystart, ystop, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
-
-    ystart = 390
-    ystop = 650
-    scale = 2.5
-    rectangles.extend(find_cars(img, ystart, ystop, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
-    
     draw_boxes(img,rectangles)
+    #draw_boxes(img,rectangles_all,(50,50,50),1)
     add_heat(heatmap,rectangles)
-    cv2.threshold(heatmap,3,255,cv2.THRESH_TOZERO,heatmap)
+    cv2.threshold(heatmap,7,255,cv2.THRESH_TOZERO,heatmap)
     labels = label(heatmap)
     draw_labeled_bboxes(img,labels)
 
