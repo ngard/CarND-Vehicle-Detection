@@ -6,6 +6,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.svm import LinearSVC
 from common import bin_spatial, color_hist, get_hog_features
 
+base_dir = "/home/tohge/data/udacity.carnd/vehicle_detection"
+
 # Define a function to extract features from a list of images
 # Have this function call bin_spatial() and color_hist()
 def extract_features(imgs, cspace='RGB', spatial_size=(32, 32), hist_bins=32, orient=9,
@@ -114,7 +116,7 @@ def train_svc(images_vehicle,images_nonvehicle, orient, pix_per_cell, cell_per_b
                             
 def list_images(category):
     image_paths = []
-    dir_root = "./images/"
+    dir_root = base_dir + "/in/images/"
     for directory in os.listdir(dir_root+category):
         directory = dir_root + category + "/" + directory
         if not os.path.isdir(directory):
@@ -150,4 +152,4 @@ dist_pickle = {"svc":clf,
                "spatial_size":spatial_size,
                "hist_bins":hist_bins}
 
-pickle.dump(dist_pickle,open("/home/tohge/data/udacity.carnd/vehicle_detection/out/svc.pickle","wb"))
+pickle.dump(dist_pickle,open(base_dir+"/out/svc.pickle","wb"))

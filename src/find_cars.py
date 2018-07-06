@@ -68,7 +68,8 @@ def extract_candidate_regions_of_defined_size(img, ystart, ystop, scale):
     hog3 = get_hog_features(ch3, orient, pix_per_cell, cell_per_block, feature_vec=False)
 
     rectangles = []
-    rectangles_all = []
+    if is_draw_all_possible_box:
+        rectangles_all = []
 
     for xb in range(nxsteps):
         for yb in range(nysteps):
@@ -109,9 +110,13 @@ def extract_candidate_regions_of_defined_size(img, ystart, ystop, scale):
                 # cv2.imwrite("../images/temp/%s-%06d.png"%(tstr,index_image),img_save)
                 # index_image += 1
 
-            rectangles_all.append((xbox_left,ytop_draw,win_draw,scale,ystart))
+            if is_draw_all_possible_box:
+                rectangles_all.append((xbox_left,ytop_draw,win_draw,scale,ystart))
 
-    return rectangles, rectangles_all
+    if is_draw_all_possible_box:
+        return rectangles, rectangles_all
+    else:
+        return rectangles, [None]
 
 def extract_candidate_regions(img):
     rectangles = []
@@ -180,8 +185,24 @@ def draw_labeled_bboxes(img, labels):
     # Return the image
     return img
 
+def process_frame(img):
+    if is_draw_all_possible_box:
+        rectangles, rectangles_all = extract_candidate_regions(img)
+    else:
+        rectangles, temp = extract_candidate_regions(img)
+    heatmap = np.zeros_like(img).astype(np.float64)
+
+    draw_boxes(img,rectangles)
+    if is_draw_all_possible_box:
+        draw_boxes(img,rectangles_all,(50,50,50),1)
+    add_heat(heatmap,rectangles)
+    cv2.threshold(heatmap,7,255,cv2.THRESH_TOZERO,heatmap)
+    labels = label(heatmap)
+    return labels
+
 is_write_out_movie = True
 is_write_out_image = False
+is_draw_all_possible_box = False
 speed = 1
 
 if is_write_out_movie:
@@ -190,18 +211,11 @@ if is_write_out_movie:
     video_writer = cv2.VideoWriter('detect_vehicle.avi',fourcc, 20.0, (1280,720))
 
 count_frame = 0
-    
+
 for img in read_movie("./project_video.mp4",speed):
     count_frame += 1
 
-    rectangles, rectangles_all = extract_candidate_regions(img)
-    heatmap = np.zeros_like(img).astype(np.float64)
-
-    draw_boxes(img,rectangles)
-    #draw_boxes(img,rectangles_all,(50,50,50),1)
-    add_heat(heatmap,rectangles)
-    cv2.threshold(heatmap,7,255,cv2.THRESH_TOZERO,heatmap)
-    labels = label(heatmap)
+    labels = process_frame(img)
     draw_labeled_bboxes(img,labels)
 
     if is_write_out_movie:
@@ -210,7 +224,6 @@ for img in read_movie("./project_video.mp4",speed):
         cv2.imwrite("%5d.png"%count_frame,img)
     
     cv2.imshow("img",img)
-    cv2.imshow("heat",heatmap)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
