@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.svm import LinearSVC
+from sklearn.externals import joblib
 from scipy.ndimage.measurements import label
 from datetime import datetime as dt
 from common import mkdir_if_not_exists, convert_color, bin_spatial, color_hist, get_hog_features
@@ -198,10 +199,10 @@ def process_frame(img):
     add_heat(heatmap,rectangles)
     cv2.threshold(heatmap,7,255,cv2.THRESH_TOZERO,heatmap)
     labels = label(heatmap)
-    return labels
+    draw_labeled_bboxes(img,labels)
+    return img
 
 is_write_out_movie = True
-is_write_out_image = False
 is_draw_all_possible_box = False
 speed = 1
 
@@ -210,18 +211,9 @@ if is_write_out_movie:
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     video_writer = cv2.VideoWriter('detect_vehicle.avi',fourcc, 20.0, (1280,720))
 
-count_frame = 0
-
-for img in read_movie("./project_video.mp4",speed):
-    count_frame += 1
-
-    labels = process_frame(img)
-    draw_labeled_bboxes(img,labels)
-
+for img in joblib.Parallel(n_jobs=1,verbose=3,backend="threading")([joblib.delayed(process_frame)(img) for img in read_movie("./project_video.mp4",speed)]):
     if is_write_out_movie:
         video_writer.write(img)
-    if is_write_out_image:
-        cv2.imwrite("%5d.png"%count_frame,img)
     
     cv2.imshow("img",img)
     if cv2.waitKey(1) & 0xFF == ord('q'):
