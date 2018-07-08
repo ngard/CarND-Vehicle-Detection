@@ -1,5 +1,4 @@
 import os, cv2, time, pickle
-import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.preprocessing import StandardScaler
@@ -38,9 +37,7 @@ def extract_candidate_regions_of_defined_size(img, ystart, ystop, scale):
     
     index_image = 0
 
-    img_original = img.copy()
-    
-    img = img.astype(np.float32)/255
+    #img_original = img.copy()
     img_tosearch = img[ystart:ystop,:,:]
     ctrans_tosearch = convert_color(img_tosearch, conv='BGR2YCrCb')
     if scale != 1:
@@ -93,11 +90,11 @@ def extract_candidate_regions_of_defined_size(img, ystart, ystop, scale):
 
             # Get color features
             spatial_features = bin_spatial(subimg, size=spatial_size)
-            hist_features = color_hist(subimg, nbins=hist_bins)
+            #hist_features = color_hist(subimg, nbins=hist_bins)
 
             # Scale features and make a prediction
-            test_features = X_scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))
-            #test_features = X_scaler.transform(np.hstack((shape_feat, hist_feat)).reshape(1, -1))
+            test_features = X_scaler.transform(np.hstack((spatial_features, hog_features)).reshape(1, -1))
+            #test_features = X_scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))
             test_prediction = clf.predict(test_features)
 
             xbox_left = np.int(xleft*scale)
@@ -122,10 +119,17 @@ def extract_candidate_regions_of_defined_size(img, ystart, ystop, scale):
 def extract_candidate_regions(img):
     rectangles = []
     rectangles_all = []
+
+    ystart = 390
+    ystop = 500
+    scale = 1
+    r, ra = extract_candidate_regions_of_defined_size(img, ystart, ystop, scale)
+    rectangles.extend(r)
+    rectangles_all.extend(ra)
     
     ystart = 390
     ystop = 510
-    scale = 1.3
+    scale = 1.25
     r, ra = extract_candidate_regions_of_defined_size(img, ystart, ystop, scale)
     rectangles.extend(r)
     rectangles_all.extend(ra)
@@ -197,7 +201,7 @@ def process_frame(img):
     if is_draw_all_possible_box:
         draw_boxes(img,rectangles_all,(50,50,50),1)
     add_heat(heatmap,rectangles)
-    cv2.threshold(heatmap,7,255,cv2.THRESH_TOZERO,heatmap)
+    cv2.threshold(heatmap,4,255,cv2.THRESH_TOZERO,heatmap)
     labels = label(heatmap)
     draw_labeled_bboxes(img,labels)
     return img
@@ -211,7 +215,9 @@ if is_write_out_movie:
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     video_writer = cv2.VideoWriter('detect_vehicle.avi',fourcc, 20.0, (1280,720))
 
-for img in joblib.Parallel(n_jobs=1,verbose=3,backend="threading")([joblib.delayed(process_frame)(img) for img in read_movie("./project_video.mp4",speed)]):
+# for img in joblib.Parallel(n_jobs=10,verbose=3,backend="threading")([joblib.delayed(process_frame)(img) for img in read_movie("./project_video.mp4",speed)]):
+for img in read_movie("./project_video.mp4",speed):
+    img = process_frame(img)
     if is_write_out_movie:
         video_writer.write(img)
     

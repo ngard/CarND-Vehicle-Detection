@@ -1,37 +1,26 @@
 import os, cv2, time, pickle
-import matplotlib.image as mpimg
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.svm import LinearSVC
-from common import bin_spatial, color_hist, get_hog_features
+from common import bin_spatial, color_hist, get_hog_features, convert_color
 
 base_dir = "/home/tohge/data/udacity.carnd/vehicle_detection"
 
 # Define a function to extract features from a list of images
 # Have this function call bin_spatial() and color_hist()
-def extract_features(imgs, cspace='RGB', spatial_size=(32, 32), hist_bins=32, orient=9,
-                     pix_per_cell=8, cell_per_block=2, hog_channel=0, spatial_feat=True, hist_feat=True, hog_feat=True):
+def extract_features(imgs, cspace='BGR2RGB', spatial_size=(32, 32), hist_bins=32, orient=9,
+                     pix_per_cell=8, cell_per_block=2, spatial_feat=True, hist_feat=True, hog_feat=True):
     # Create a list to append feature vectors to
     features = []
     # Iterate through the list of images
     for file in imgs:
         file_features = []
         # Read in each one by one
-        image = mpimg.imread(file)
+        image = cv2.imread(file)
         # apply color conversion if other than 'RGB'
-        if cspace != 'RGB':
-            if cspace == 'HSV':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-            elif cspace == 'LUV':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2LUV)
-            elif cspace == 'HLS':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
-            elif cspace == 'YUV':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
-            elif cspace == 'YCrCb':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
-        else: feature_image = np.copy(image)
+
+        feature_image = convert_color(image,cspace)
 
         if spatial_feat == True:
             spatial_features = bin_spatial(feature_image, size=spatial_size)
@@ -42,18 +31,13 @@ def extract_features(imgs, cspace='RGB', spatial_size=(32, 32), hist_bins=32, or
             file_features.append(hist_features)
         if hog_feat == True:
             # Call get_hog_features() with vis=False, feature_vec=True
-            if hog_channel == 'ALL':
-                hog_features = []
+            hog_features = []
 
-                for channel in range(feature_image.shape[2]):
-                    hog_features.append(get_hog_features(feature_image[:,:,channel],
-                                                         orient, pix_per_cell, cell_per_block,
-                                                         vis=False, feature_vec=True))
-                hog_features = np.ravel(hog_features)
-
-            else:
-                hog_features = get_hog_features(feature_image[:,:,hog_channel], orient,
-                                                pix_per_cell, cell_per_block, vis=False, feature_vec=True)
+            for channel in range(feature_image.shape[2]):
+                hog_features.append(get_hog_features(feature_image[:,:,channel],
+                                                     orient, pix_per_cell, cell_per_block,
+                                                     vis=False, feature_vec=True))
+            hog_features = np.ravel(hog_features)
             # Append the new feature vector to the features list
             file_features.append(hog_features)
         features.append(np.concatenate(file_features))
@@ -63,20 +47,17 @@ def extract_features(imgs, cspace='RGB', spatial_size=(32, 32), hist_bins=32, or
 
 def train_svc(images_vehicle,images_nonvehicle, orient, pix_per_cell, cell_per_block,
               spatial_size, hist_bins, spatial_feat, hist_feat, hog_feat):
-    hog_channel = "ALL" # Can be 0, 1, 2, or "ALL"
-    
     t=time.time()
-    features_vehicle = extract_features(images_vehicle, cspace="YCrCb",
+    features_vehicle = extract_features(images_vehicle, cspace="BGR2YCrCb",
                                         spatial_size=spatial_size, hist_bins=hist_bins,
                                         orient=orient, pix_per_cell=pix_per_cell,
                                         cell_per_block=cell_per_block,
-                                        hog_channel=hog_channel, spatial_feat=spatial_feat,
+                                        spatial_feat=spatial_feat,
                                         hist_feat=hist_feat, hog_feat=hog_feat)
-    features_nonvehicle = extract_features(images_nonvehicle, cspace="YCrCb",
+    features_nonvehicle = extract_features(images_nonvehicle, cspace="BGR2YCrCb",
                                            spatial_size=spatial_size, hist_bins=hist_bins,
                                            orient=orient, pix_per_cell=pix_per_cell,
                                            cell_per_block=cell_per_block,
-                                           hog_channel=hog_channel,
                                            spatial_feat=spatial_feat,
                                            hist_feat=hist_feat, hog_feat=hog_feat)
     t2 = time.time()
@@ -138,7 +119,7 @@ cell_per_block = 2
 spatial_size = (16, 16) # Spatial binning dimensions
 hist_bins = 16    # Number of histogram bins
 spatial_feat = True # Spatial features on or off
-hist_feat = True # Histogram features on or off
+hist_feat = False # Histogram features on or off
 hog_feat = True # HOG features on or off
 
 clf, X_scaler = train_svc(images_vehicle,images_nonvehicle,orient,pix_per_cell,cell_per_block,

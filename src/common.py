@@ -1,4 +1,4 @@
-import cv2
+import cv2, os
 import numpy as np
 from skimage.feature import hog
 
@@ -6,20 +6,19 @@ def mkdir_if_not_exists(directory):
     if not os.path.exists(directory):
         os.makedirs(directory)                        
 
-def convert_color(img, conv='RGB2YCrCb'):
-    if conv == 'RGB2YCrCb':
-        return cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
+def convert_color(img, conv='BGR2YCrCb'):
     if conv == 'BGR2RGB':
         return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     if conv == 'BGR2YCrCb':
         return cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
     if conv == 'BGR2HLS':
         return cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
+    if conv == 'BGR2HSV':
+        return cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     if conv == 'BGR2LUV':
         return cv2.cvtColor(img, cv2.COLOR_BGR2LUV)
-    if conv == 'RGB2LUV':
-        return cv2.cvtColor(img, cv2.COLOR_RGB2LUV)
-
+    if conv == 'BGR2YUV':
+        return cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
         
 # Define a function to compute binned color features
 def bin_spatial(img, size=(32, 32)):
@@ -29,14 +28,12 @@ def bin_spatial(img, size=(32, 32)):
     return features
 
 # Define a function to compute color histogram features
-# NEED TO CHANGE bins_range if reading .png files with mpimg!
 def color_hist(img, nbins=32, bins_range=(0, 256)):
-    # Compute the histogram of the color channels separately
-    channel1_hist = np.histogram(img[:,:,0], bins=nbins, range=bins_range)
-    channel2_hist = np.histogram(img[:,:,1], bins=nbins, range=bins_range)
-    channel3_hist = np.histogram(img[:,:,2], bins=nbins, range=bins_range)
     # Concatenate the histograms into a single feature vector
-    hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
+    hist_features = np.concatenate((
+        np.histogram(img[:,:,0], bins=nbins, range=bins_range)[0],
+        np.histogram(img[:,:,1], bins=nbins, range=bins_range)[0],
+        np.histogram(img[:,:,2], bins=nbins, range=bins_range)[0]))
     # Return the individual histograms, bin_centers and feature vector
     return hist_features
 
