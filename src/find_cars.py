@@ -12,16 +12,18 @@ from math import sqrt
 
 pickle_clf_info = pickle.load(open("/home/tohge/data/udacity.carnd/vehicle_detection/out/svc.pickle","rb"))
 
-def read_movie(movie_path, speed = 1):
+def read_movie(movie_path, speed = 1, skip_to = 0):
     cap = cv2.VideoCapture(movie_path)
     count_frame = 0
-    while(cap.isOpened()):        
+    while(cap.isOpened()):
         ret, frame = cap.read()
         if ret != True:
             break
 
         count_frame += 1
         if not count_frame % speed == 0:
+            continue
+        if count_frame < skip_to:
             continue
         
         yield frame
@@ -194,27 +196,27 @@ def extract_labeled_bboxes(labels):
 
 def draw_bboxes(img, detection_infos):
     for info in detection_infos.values():
-        if info["count"] > 5:
+        if info["count"] > 6:
             cv2.rectangle(img, info["lefttop"], info["rightbottom"], (0,0,255), 6)
         else:
             cv2.rectangle(img, info["lefttop"], info["rightbottom"], (0,200,255), 3)
 
 def is_point_in_region(point, region_center, region_size):
-    return ((point[0] >= (region_center[0] - region_size[0]/2)) or
-            (point[0] <= (region_center[0] + region_size[0]/2)) or
-            (point[1] >= (region_center[1] - region_size[1]/2)) or
-            (point[1] <= (region_center[1] + region_size[1]/2)))
+    return ((point[0] >= (region_center[0] - region_size[0]//2)) and
+            (point[0] <= (region_center[0] + region_size[0]//2)) and
+            (point[1] >= (region_center[1] - region_size[1]//2)) and
+            (point[1] <= (region_center[1] + region_size[1]//2)))
 
 def tracking_detection(bboxes, detection_infos_prev):
     detection_infos_now = {}
 
     id_info = 0
     for bbox in bboxes:
-        center = ((bbox[0][0] + bbox[1][0])/2,(bbox[0][1] + bbox[1][1])/2)
+        center = ((bbox[0][0] + bbox[1][0])//2,(bbox[0][1] + bbox[1][1])//2)
         size = ((bbox[1][0] - bbox[0][0]),(bbox[1][1] - bbox[0][1]))
         detection_infos_now[id_info] = {"center":center, "size":size,
                                         "lefttop":bbox[0], "rightbottom":bbox[1],
-                                        "count": 0}
+                                        "count": 0, "lost": False}
         id_info += 1
 
     detection_infos_for_next = {}
@@ -229,12 +231,18 @@ def tracking_detection(bboxes, detection_infos_prev):
             if (diff_candidate > diff_center):
                 diff_candidate = diff_center
                 id_now_candidate = id_now
+        # Lost tracking mode
         if id_now_candidate is None:
-            continue
-        id_now = id_now_candidate
-        detection_infos_now[id_now]["count"] = info_prev["count"] + 1
-        detection_infos_for_next[id_prev] = detection_infos_now[id_now]
-        del detection_infos_now[id_now]
+            info_prev["lost"] = True
+            info_prev["count"] //= 10
+            if info_prev["count"] > 1:
+                detection_infos_for_next[id_prev] = info_prev
+        # Tracking mode
+        else:
+            id_now = id_now_candidate
+            detection_infos_now[id_now]["count"] = info_prev["count"] + 1
+            detection_infos_for_next[id_prev] = detection_infos_now[id_now]
+            del detection_infos_now[id_now]
 
     for id_now, info_now in detection_infos_now.items():
         id_for_next = 0
@@ -268,6 +276,7 @@ def process_frame(img, detection_infos_prev):
 is_write_out_movie = True
 is_draw_all_possible_box = False
 speed = 1
+skip_to = 0
 
 if is_write_out_movie:
     # Define the codec and create VideoWriter object
@@ -278,7 +287,7 @@ if is_write_out_movie:
 detection_infos = {}
 
 # for img in joblib.Parallel(n_jobs=10,verbose=3,backend="threading")([joblib.delayed(process_frame)(img) for img in read_movie("./project_video.mp4",speed)]):
-for img in read_movie("./project_video.mp4",speed):
+for img in read_movie("./project_video.mp4",speed,skip_to):
     img, detection_infos = process_frame(img, detection_infos)
     if is_write_out_movie:
         video_writer.write(img)
