@@ -8,6 +8,7 @@ from sklearn.externals import joblib
 from scipy.ndimage.measurements import label
 from datetime import datetime as dt
 from common import mkdir_if_not_exists, convert_color, bin_spatial, color_hist, get_hog_features
+from math import sqrt
 
 pickle_clf_info = pickle.load(open("/home/tohge/data/udacity.carnd/vehicle_detection/out/svc.pickle","rb"))
 
@@ -175,7 +176,8 @@ def add_heat(heatmap, rectangles):
     # Return updated heatmap
     return heatmap
 
-def draw_labeled_bboxes(img, labels):
+def extract_labeled_bboxes(labels):
+    bboxes = []
     # Iterate through all detected cars
     for car_number in range(1, labels[1]+1):
         # Find pixels with each car_number label value
@@ -186,25 +188,82 @@ def draw_labeled_bboxes(img, labels):
         # Define a bounding box based on min/max x and y
         bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
         # Draw the box on the image
-        cv2.rectangle(img, bbox[0], bbox[1], (0,0,255), 6)
+        bboxes.append(bbox)
     # Return the image
-    return img
+    return bboxes
 
-def process_frame(img):
+def draw_bboxes(img, detection_infos):
+    for info in detection_infos.values():
+        if info["count"] > 5:
+            cv2.rectangle(img, info["lefttop"], info["rightbottom"], (0,0,255), 6)
+        else:
+            cv2.rectangle(img, info["lefttop"], info["rightbottom"], (0,200,255), 3)
+
+def is_point_in_region(point, region_center, region_size):
+    return ((point[0] >= (region_center[0] - region_size[0]/2)) or
+            (point[0] <= (region_center[0] + region_size[0]/2)) or
+            (point[1] >= (region_center[1] - region_size[1]/2)) or
+            (point[1] <= (region_center[1] + region_size[1]/2)))
+
+def tracking_detection(bboxes, detection_infos_prev):
+    detection_infos_now = {}
+
+    id_info = 0
+    for bbox in bboxes:
+        center = ((bbox[0][0] + bbox[1][0])/2,(bbox[0][1] + bbox[1][1])/2)
+        size = ((bbox[1][0] - bbox[0][0]),(bbox[1][1] - bbox[0][1]))
+        detection_infos_now[id_info] = {"center":center, "size":size,
+                                        "lefttop":bbox[0], "rightbottom":bbox[1],
+                                        "count": 0}
+        id_info += 1
+
+    detection_infos_for_next = {}
+    for id_prev, info_prev in detection_infos_prev.items():
+        diff_candidate = 99999
+        id_now_candidate = None
+        for id_now, info_now in detection_infos_now.items():
+            if not is_point_in_region(info_now["center"], info_prev["center"], info_prev["size"]):
+                continue
+            diff_center = sqrt((info_now["center"][0]-info_prev["center"][0])**2 +
+                               (info_now["center"][1]-info_prev["center"][1])**2)
+            if (diff_candidate > diff_center):
+                diff_candidate = diff_center
+                id_now_candidate = id_now
+        if id_now_candidate is None:
+            continue
+        id_now = id_now_candidate
+        detection_infos_now[id_now]["count"] = info_prev["count"] + 1
+        detection_infos_for_next[id_prev] = detection_infos_now[id_now]
+        del detection_infos_now[id_now]
+
+    for id_now, info_now in detection_infos_now.items():
+        id_for_next = 0
+        while id_for_next in detection_infos_for_next.keys():
+            id_for_next += 1
+        detection_infos_for_next[id_for_next] = info_now
+
+    return detection_infos_for_next
+
+def process_frame(img, detection_infos_prev):
     if is_draw_all_possible_box:
         rectangles, rectangles_all = extract_candidate_regions(img)
     else:
         rectangles, temp = extract_candidate_regions(img)
     heatmap = np.zeros_like(img).astype(np.float64)
 
-    draw_boxes(img,rectangles)
+    draw_boxes(img,rectangles,width=1)
     if is_draw_all_possible_box:
         draw_boxes(img,rectangles_all,(50,50,50),1)
     add_heat(heatmap,rectangles)
     cv2.threshold(heatmap,4,255,cv2.THRESH_TOZERO,heatmap)
     labels = label(heatmap)
-    draw_labeled_bboxes(img,labels)
-    return img
+    bboxes = extract_labeled_bboxes(labels)
+
+    detection_infos = tracking_detection(bboxes, detection_infos_prev)
+    for k, v in detection_infos.items():
+        print(k,v)
+    draw_bboxes(img,detection_infos)
+    return img, detection_infos
 
 is_write_out_movie = True
 is_draw_all_possible_box = False
@@ -215,9 +274,12 @@ if is_write_out_movie:
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     video_writer = cv2.VideoWriter('detect_vehicle.avi',fourcc, 20.0, (1280,720))
 
+# An array to store info of detection result of previous frame.
+detection_infos = {}
+
 # for img in joblib.Parallel(n_jobs=10,verbose=3,backend="threading")([joblib.delayed(process_frame)(img) for img in read_movie("./project_video.mp4",speed)]):
 for img in read_movie("./project_video.mp4",speed):
-    img = process_frame(img)
+    img, detection_infos = process_frame(img, detection_infos)
     if is_write_out_movie:
         video_writer.write(img)
     
