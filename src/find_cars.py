@@ -82,8 +82,7 @@ def extract_candidate_regions_of_defined_size(img, ystart, ystop, scale):
             hog_feat2 = hog2[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel()
             hog_feat3 = hog3[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel()
 
-            hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3
-                ))
+            hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3))
 
             xleft = xpos*pix_per_cell
             ytop = ypos*pix_per_cell
@@ -224,26 +223,29 @@ def tracking_detection(bboxes, detection_infos_prev):
         diff_candidate = 99999
         id_now_candidate = None
         for id_now, info_now in detection_infos_now.items():
+            # checking if the center of the region is within the one of previous frame.
             if not is_point_in_region(info_now["center"], info_prev["center"], info_prev["size"]):
                 continue
+            # if there are several candidates, the one with minimum distance between centers wins
             diff_center = sqrt((info_now["center"][0]-info_prev["center"][0])**2 +
                                (info_now["center"][1]-info_prev["center"][1])**2)
             if (diff_candidate > diff_center):
                 diff_candidate = diff_center
                 id_now_candidate = id_now
-        # Lost tracking mode
-        if id_now_candidate is None:
-            info_prev["lost"] = True
-            info_prev["count"] //= 10
-            if info_prev["count"] > 1:
-                detection_infos_for_next[id_prev] = info_prev
-        # Tracking mode
-        else:
+        # Tracking mode; if similar result is found, keep ID and increment tracking count by 1.
+        if not id_now_candidate is None:
             id_now = id_now_candidate
             detection_infos_now[id_now]["count"] = info_prev["count"] + 1
             detection_infos_for_next[id_prev] = detection_infos_now[id_now]
             del detection_infos_now[id_now]
+        # Lost tracking mode; even if no result for a vehicle in current frame, keep tracking for a few frames depending on the number of tracking count
+        else:
+            info_prev["lost"] = True
+            info_prev["count"] //= 10
+            if info_prev["count"] > 1:
+                detection_infos_for_next[id_prev] = info_prev
 
+    # Insert new results
     for id_now, info_now in detection_infos_now.items():
         id_for_next = 0
         while id_for_next in detection_infos_for_next.keys():
@@ -252,7 +254,7 @@ def tracking_detection(bboxes, detection_infos_prev):
 
     return detection_infos_for_next
 
-def process_frame(img, detection_infos_prev):
+def process_frame(img, detection_infos_prev={}):
     if is_draw_all_possible_box:
         rectangles, rectangles_all = extract_candidate_regions(img)
     else:
@@ -271,9 +273,10 @@ def process_frame(img, detection_infos_prev):
     for k, v in detection_infos.items():
         print(k,v)
     draw_bboxes(img,detection_infos)
-    return img, detection_infos
+    return img, detection_infos#, heatmap
 
 is_write_out_movie = True
+is_write_out_images = False
 is_draw_all_possible_box = False
 speed = 1
 skip_to = 0
@@ -286,15 +289,32 @@ if is_write_out_movie:
 # An array to store info of detection result of previous frame.
 detection_infos = {}
 
+frame_count = 0
 # for img in joblib.Parallel(n_jobs=10,verbose=3,backend="threading")([joblib.delayed(process_frame)(img) for img in read_movie("./project_video.mp4",speed)]):
 for img in read_movie("./project_video.mp4",speed,skip_to):
     img, detection_infos = process_frame(img, detection_infos)
     if is_write_out_movie:
         video_writer.write(img)
-    
+
+    if is_write_out_images:
+        cv2.imwrite("./output_images/%05d.png"%frame_count,img)
+        frame_count += 1
+
     cv2.imshow("img",img)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
+
+# ## steps to process test images.
+# for fname_img in os.listdir("./test_images"):
+#     if not ".jpg" in fname_img:
+#         continue
+#     img = cv2.imread("./test_images/"+fname_img)
+#     processed_img, tmp, heatmap_img = process_frame(img)
+#     cv2.imwrite("./output_images/%s"%fname_img,processed_img)
+#     cv2.imwrite("./output_images/heatmap_%s"%fname_img,heatmap_img*10)
+#     cv2.imshow("img",processed_img)
+#     if cv2.waitKey(1000) & 0xFF == ord('q'):
+#         break
 
 if is_write_out_movie:
     video_writer.release()
